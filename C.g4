@@ -32,10 +32,13 @@ grammar C;
 primaryExpression returns[ExprType type]
     :   Identifier { 
     	$type = new ExprType();
+
 	if ($Identifier.text.endsWith("alloc") || $Identifier.text.equals("free"))
 	   $type.setPointer();
+	else
+	   $type.setVar();
     }
-    |   Constant { $type = new ExprType(); }
+    |   Constant { $type = new ExprType(); $type.setConst(); }
     |   StringLiteral+  { $type = new ExprType(); }
     |   '(' e=expression ')' { $type = $e.type; }
     |   g=genericSelection     { $type = $g.type; }
@@ -83,10 +86,10 @@ unaryExpression returns [ExprType type]
     |   '++' e1=unaryExpression { $type = new ExprType($e1.type); }
     |   '--' e1=unaryExpression { $type = new ExprType($e1.type); }
     |   unaryOperator e2=castExpression { $type = new ExprType($e2.type); }
-    |   'sizeof' unaryExpression { $type = new ExprType(); }
-    |   'sizeof' '(' typeName ')' { $type = new ExprType(); }
-    |   '_Alignof' '(' typeName ')' { $type = new ExprType(); }
-    |   '&&' Identifier { $type = new ExprType(); } // GCC extension address of label 
+    |   'sizeof' unaryExpression { $type = new ExprType(); $type.setConst(); }
+    |   'sizeof' '(' typeName ')' { $type = new ExprType(); $type.setConst(); }
+    |   '_Alignof' '(' typeName ')' { $type = new ExprType(); $type.setConst(); }
+    |   '&&' Identifier { $type = new ExprType(); $type.setConst(); } // GCC extension address of label 
     ;
 
 unaryOperator
@@ -97,14 +100,32 @@ castExpression returns [ExprType type]
     :   '(' typeName ')' e=castExpression { $type = $e.type; }
     |   '__extension__' '(' typeName ')' e=castExpression { $type = $e.type; }
     |   e1=unaryExpression { $type = $e1.type; }
-    |   DigitSequence { $type = new ExprType(); } // for
+    |   DigitSequence { $type = new ExprType(); $type.setConst(); } // for
     ;
 
 multiplicativeExpression returns [ExprType type]
     :   e=castExpression { $type = $e.type; }
-    |   e1=multiplicativeExpression '*' e2=castExpression { $type = new ExprType($e1.type, $e2.type); $type.setArith(); }
-    |   e1=multiplicativeExpression '/' e2=castExpression { $type = new ExprType($e1.type, $e2.type); $type.setArith(); }
-    |   e1=multiplicativeExpression '%' e2=castExpression { $type = new ExprType($e1.type, $e2.type); $type.setArith(); }
+    |   e1=multiplicativeExpression '*' e2=castExpression {     	
+    	$type = new ExprType($e1.type, $e2.type); 
+	$type.setArith(); 
+
+	if ($e1.type.isVar() && $e2.type.isVar())
+	   $type.setNonLinear();
+    }
+    |   e1=multiplicativeExpression '/' e2=castExpression { 
+    	$type = new ExprType($e1.type, $e2.type); 
+	$type.setArith(); 
+
+	if ($e1.type.isVar() && $e2.type.isVar())
+	   $type.setNonLinear();
+    }
+    |   e1=multiplicativeExpression '%' e2=castExpression { 
+    	$type = new ExprType($e1.type, $e2.type); 
+	$type.setArith(); 
+
+	if ($e1.type.isVar() && $e2.type.isVar())
+	   $type.setNonLinear();
+    }
     ;
 
 additiveExpression returns [ExprType type]
@@ -170,16 +191,26 @@ conditionalExpression returns [ExprType type]
 assignmentExpression returns [ExprType type]
     :   e=conditionalExpression { $type = $e.type; }
     |   e1=unaryExpression op=assignmentOperator e2=assignmentExpression {
-    	$type = new ExprType($e1.type, $e2.type);
+    	if ($e1.type.isVar() &&
+	   $e2.type.isConst() &&
+	   $op.text.equals("="))
+	   $type = new ExprType();
+	else {
+    	   $type = new ExprType($e1.type, $e2.type);
 
-        if ($op.text.equals("*=") || 
-	   $op.text.equals("/=") || 
-	   $op.text.equals("%=") || 
-	   $op.text.equals("+=") || 
-	   $op.text.equals("-="))
+           if ($op.text.equals("*=") || 
+	      $op.text.equals("/=") || 
+	      $op.text.equals("%=") || 
+	      $op.text.equals("+=") || 
+	      $op.text.equals("-="))
            $type.setArith();
+
+ 	   if ($e1.type.isVar() && $e2.type.isVar() && 
+	   ($op.text.equals("*=") || $op.text.equals("/=") || $op.text.equals("%=")))
+	   $type.setNonLinear();
+        } 
     }
-    |   DigitSequence { $type = new ExprType(); } // for
+    |   DigitSequence { $type = new ExprType(); $type.setConst(); } // for
     ;
 
 assignmentOperator

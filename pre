@@ -1,8 +1,12 @@
 #!/bin/bash
 
-clang -E -D "__attribute__(ARGS)=" \
-      	 -D "__align__(ARGS)=" \
-	 -D "aligned(ARGS)=" \
-	 -D "_Nonnull=" \
-	 -D "_Nullable=" \
-	 $1 $2 > $2.c4
+cpp="gcc -E"
+
+$cpp -D "__attribute__(ARGS)=" \
+    -D "__align__(ARGS)=" \
+    -D "aligned(ARGS)=" \
+    -D "_Nonnull=" \
+    -D "_Nullable=" \
+    -D "__extension__=" \
+    -D "__asm__(ARGS)=" \
+    $1 $2 > $2.c4

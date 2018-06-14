@@ -48,8 +48,8 @@ public class CMain {
     }
 
     public static void output() {
-	System.out.println("\n\nLines:\t\t" + ExprTypeCounter.getLines());
-	System.out.println("Arithmetic:\t" + ExprTypeCounter.getArithExpr());
+	System.out.println("\nLines:\t\t" + ExprTypeCounter.getLines());
+	System.out.println("Arithmetic:\t" + ExprTypeCounter.getArithExpr() + " (" + ExprTypeCounter.getNonLinearExpr() + " nonlinear)");
 	System.out.println("Pointers:\t" + ExprTypeCounter.getPointerExpr());
 	System.out.println("Arrays:\t\t" + ExprTypeCounter.getArrayExpr());
     }
