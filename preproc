@@ -1,0 +1,10 @@
+#!/bin/bash
+
+pre='/Users/radu/Work/devel/antlr4/c-parser/examples/pre'
+
+for i in $(find $1 -type d -print)
+do 
+    inc="-I"$i" "$inc" "
+done 
+
+find $1 -name "*.c" -type f -exec $pre "$inc" {} \;
