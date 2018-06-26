@@ -13,9 +13,12 @@ public class ExprTypeCounter {
 
     public static void incLines(int last) { lines += last; }
 
-    public static void incType(ExprType t) {
-	if (t == null || t.isConst())
+    public static void incType(ExprType t, int l) {
+	if (t == null || t.isVoid() || t.isConst() || t.isVar())
 	    return;
+
+	if (CMain.verbosityLevel >= CMain.MEDIUM)
+	    System.out.println("\tline " + l + ": " + t + " expression found");
 
 	if (t.isArith())
 	    arith ++;
@@ -29,31 +32,5 @@ public class ExprTypeCounter {
 	if (t.isNonLinear())
 	    nonlinear ++;
     }
-
-    public static void printType(int l, ExprType t) {
-	if (t.isVoid() || t.isConst())
-	    return;
-
-	System.out.print("\t\tline " + l + ": ");
-
-	if (t.isConst())
-	    System.out.print("constant ");
-
-	if (t.isVar())
-	    System.out.print("variable ");
-
-	if (t.isPointer())
-	    System.out.print("pointer ");
-	
-	if (t.isArray())
-	    System.out.print("array ");
-
-	if (t.isNonLinear())
-	    System.out.print("nonlinear ");
-
-	if (t.isArith())
-	    System.out.print("arithmetic ");
-
-	System.out.println("expression found");
-    }
 }
+

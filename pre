@@ -2,6 +2,8 @@
 
 cpp="gcc -E"
 
+echo "Preprocessing $2 ..."
+
 $cpp -D "__attribute__(ARGS)=" \
     -D "__align__(ARGS)=" \
     -D "aligned(ARGS)=" \
@@ -9,4 +11,9 @@ $cpp -D "__attribute__(ARGS)=" \
     -D "_Nullable=" \
     -D "__extension__=" \
     -D "__asm__(ARGS)=" \
+    -D "__typeof__(ARGS)=" \
+    -D "__builtin_types_compatible_p(ARG1,ARG2)=1" \
+    -D "internal_function=" \
+    -D "NO_OPENSSL" \
+    -D "__GNUC_PREREQ(ARG1,ARG2)" \
     $1 $2 > $2.c4

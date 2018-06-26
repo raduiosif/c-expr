@@ -31,18 +31,17 @@ grammar C;
 
 primaryExpression returns[ExprType type]
     :   Identifier { 
-    	$type = new ExprType();
-
-	if ($Identifier.text.endsWith("alloc") || $Identifier.text.equals("free"))
-	   $type.setPointer();
-	else
-	   $type.setVar();
+	if ($Identifier.text.endsWith("alloc") || $Identifier.text.equals("free")) {
+	   $type = new ExprType(ExprType.POINT);
+        } else {
+	   $type = new ExprType(ExprType.VAR);
+ 	}
     }
-    |   Constant { $type = new ExprType(); $type.setConst(); }
-    |   StringLiteral+  { $type = new ExprType(); }
+    |   Constant { $type = new ExprType(ExprType.CONST); }
+    |   StringLiteral+  { $type = new ExprType(ExprType.VOID); }
     |   '(' e=expression ')' { $type = $e.type; }
     |   g=genericSelection     { $type = $g.type; }
-    |   '__extension__'? '(' compoundStatement ')' { $type = new ExprType(); } // Blocks (GCC extension)
+    |   '__extension__'? '(' compoundStatement ')' { $type = new ExprType(ExprType.VOID); } // Blocks (GCC extension)
     |   '__builtin_va_arg' '(' e1=unaryExpression ',' typeName ')' { $type = $e1.type; }
     |   '__builtin_offsetof' '(' typeName ',' e1=unaryExpression ')' { $type = $e1.type; }
     ;
@@ -63,33 +62,33 @@ genericAssociation
 
 postfixExpression returns [ExprType type]
     :   e=primaryExpression { $type = $e.type; }
-    |   postfixExpression '[' e1=expression ']' { $type = new ExprType($e1.type); $type.setArray(); }
+    |   p=postfixExpression '[' e1=expression ']' { $type = new ExprType($p.type, $e1.type); $type.setArray(); }
     |   p=postfixExpression '(' ')' { $type = $p.type; }
     |   p=postfixExpression '(' l=argumentExpressionList ')' { $type = new ExprType($p.type, $l.type); }
     |   p=postfixExpression '.' Identifier { $type = $p.type; }
     |   p=postfixExpression '->' Identifier { $type = $p.type; $type.setPointer(); }
     |   p=postfixExpression '++' { $type = $p.type; }
     |   p=postfixExpression '--' { $type = $p.type; }
-    |   '(' typeName ')' '{' initializerList '}' { $type = new ExprType(); }
-    |   '(' typeName ')' '{' initializerList ',' '}' { $type = new ExprType(); }
-    |   '__extension__' '(' typeName ')' '{' initializerList '}' { $type = new ExprType(); }
-    |   '__extension__' '(' typeName ')' '{' initializerList ',' '}' { $type = new ExprType(); }
+    |   '(' typeName ')' '{' initializerList '}' { $type = new ExprType(ExprType.VOID); }
+    |   '(' typeName ')' '{' initializerList ',' '}' { $type = new ExprType(ExprType.VOID); }
+    |   '__extension__' '(' typeName ')' '{' initializerList '}' { $type = new ExprType(ExprType.VOID); }
+    |   '__extension__' '(' typeName ')' '{' initializerList ',' '}' { $type = new ExprType(ExprType.VOID); }
     ;
 
 argumentExpressionList returns[ExprType type]
     :   e=assignmentExpression { $type = $e.type; }
-    |   l=argumentExpressionList ',' e=assignmentExpression { $type = new ExprType($l.type, $e.type);} 
+    |   l=argumentExpressionList ',' e=assignmentExpression { $type = new ExprType($l.type, $e.type); } 
     ;
 
 unaryExpression returns [ExprType type]
     :   e=postfixExpression { $type = $e.type; }
-    |   '++' e1=unaryExpression { $type = new ExprType($e1.type); }
-    |   '--' e1=unaryExpression { $type = new ExprType($e1.type); }
-    |   unaryOperator e2=castExpression { $type = new ExprType($e2.type); }
-    |   'sizeof' unaryExpression { $type = new ExprType(); $type.setConst(); }
-    |   'sizeof' '(' typeName ')' { $type = new ExprType(); $type.setConst(); }
-    |   '_Alignof' '(' typeName ')' { $type = new ExprType(); $type.setConst(); }
-    |   '&&' Identifier { $type = new ExprType(); $type.setConst(); } // GCC extension address of label 
+    |   '++' e1=unaryExpression { $type = $e1.type; }
+    |   '--' e1=unaryExpression { $type = $e1.type; }
+    |   unaryOperator e2=castExpression { $type = $e2.type; }
+    |   'sizeof' unaryExpression { $type = new ExprType(ExprType.CONST); }
+    |   'sizeof' '(' typeName ')' { $type = new ExprType(ExprType.CONST); }
+    |   '_Alignof' '(' typeName ')' { $type = new ExprType(ExprType.CONST); }
+    |   '&&' Identifier { $type = new ExprType(ExprType.CONST); } // GCC extension address of label 
     ;
 
 unaryOperator
@@ -100,117 +99,78 @@ castExpression returns [ExprType type]
     :   '(' typeName ')' e=castExpression { $type = $e.type; }
     |   '__extension__' '(' typeName ')' e=castExpression { $type = $e.type; }
     |   e1=unaryExpression { $type = $e1.type; }
-    |   DigitSequence { $type = new ExprType(); $type.setConst(); } // for
+    |   DigitSequence { $type = new ExprType(ExprType.CONST); } // for
     ;
 
 multiplicativeExpression returns [ExprType type]
     :   e=castExpression { $type = $e.type; }
-    |   e1=multiplicativeExpression '*' e2=castExpression {     	
-    	$type = new ExprType($e1.type, $e2.type); 
-	$type.setArith(); 
-
-	if ($e1.type.isVar() && $e2.type.isVar())
-	   $type.setNonLinear();
-    }
-    |   e1=multiplicativeExpression '/' e2=castExpression { 
-    	$type = new ExprType($e1.type, $e2.type); 
-	$type.setArith(); 
-
-	if ($e1.type.isVar() && $e2.type.isVar())
-	   $type.setNonLinear();
-    }
-    |   e1=multiplicativeExpression '%' e2=castExpression { 
-    	$type = new ExprType($e1.type, $e2.type); 
-	$type.setArith(); 
-
-	if ($e1.type.isVar() && $e2.type.isVar())
-	   $type.setNonLinear();
-    }
+    |   e1=multiplicativeExpression op='*' e2=castExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=multiplicativeExpression op='/' e2=castExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=multiplicativeExpression op='%' e2=castExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 additiveExpression returns [ExprType type]
     :   e=multiplicativeExpression { $type = $e.type; }
-    |   e1=additiveExpression '+' e2=multiplicativeExpression { $type = new ExprType($e1.type, $e2.type); $type.setArith(); }
-    |   e1=additiveExpression '-' e2=multiplicativeExpression { $type = new ExprType($e1.type, $e2.type); $type.setArith(); }
+    |   e1=additiveExpression op='+' e2=multiplicativeExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=additiveExpression op='-' e2=multiplicativeExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 shiftExpression returns [ExprType type]
     :   e=additiveExpression { $type = $e.type; }
-    |   e1=shiftExpression '<<' e2=additiveExpression { $type = new ExprType($e1.type, $e2.type); }
-    |   e1=shiftExpression '>>' e2=additiveExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=shiftExpression op='<<' e2=additiveExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=shiftExpression op='>>' e2=additiveExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 relationalExpression returns [ExprType type]
     :   e=shiftExpression { $type = $e.type; }
-    |   e1=relationalExpression '<' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type); }
-    |   e1=relationalExpression '>' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type); }
-    |   e1=relationalExpression '<=' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type); }
-    |   e1=relationalExpression '>=' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=relationalExpression op='<' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=relationalExpression op='>' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=relationalExpression op='<=' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=relationalExpression op='>=' e2=shiftExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 equalityExpression returns [ExprType type]
     :   e=relationalExpression { $type = $e.type; }
-    |   e1=equalityExpression '==' e2=relationalExpression { $type = new ExprType($e1.type, $e2.type); }
-    |   e1=equalityExpression '!=' e2=relationalExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=equalityExpression op='==' e2=relationalExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
+    |   e1=equalityExpression op='!=' e2=relationalExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 andExpression returns [ExprType type]
     :   e=equalityExpression { $type = $e.type; }
-    |   e1=andExpression '&' e2=equalityExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=andExpression op='&' e2=equalityExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 exclusiveOrExpression returns [ExprType type]
     :   e=andExpression { $type = $e.type; }
-    |   e1=exclusiveOrExpression '^' e2=andExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=exclusiveOrExpression op='^' e2=andExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 inclusiveOrExpression returns [ExprType type]
     :   e=exclusiveOrExpression { $type = $e.type; }
-    |   e1=inclusiveOrExpression '|' e2=exclusiveOrExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=inclusiveOrExpression op='|' e2=exclusiveOrExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 logicalAndExpression returns [ExprType type]
     :   e=inclusiveOrExpression { $type = $e.type; }
-    |   e1=logicalAndExpression '&&' e2=inclusiveOrExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=logicalAndExpression op='&&' e2=inclusiveOrExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 logicalOrExpression returns [ExprType type]
     :   e=logicalAndExpression { $type = $e.type; }
-    |   e1=logicalOrExpression '||' e2=logicalAndExpression { $type = new ExprType($e1.type, $e2.type); }
+    |   e1=logicalOrExpression op='||' e2=logicalAndExpression { $type = new ExprType($e1.type, $e2.type, $op.text); }
     ;
 
 conditionalExpression returns [ExprType type]
-    :   e1=logicalOrExpression {
-    	$type = $e1.type;
-    }
+    :   e1=logicalOrExpression { $type = $e1.type; }
     |   e1=logicalOrExpression '?' e2=expression ':' e3=conditionalExpression { 
-    	$type = new ExprType($e1.type, $e2.type, $e3.type); 
+    	$type = new ExprType($e1.type, new ExprType($e2.type, $e3.type)); 
     }
     ;
 
 assignmentExpression returns [ExprType type]
     :   e=conditionalExpression { $type = $e.type; }
-    |   e1=unaryExpression op=assignmentOperator e2=assignmentExpression {
-    	if ($e1.type.isVar() &&
-	   $e2.type.isConst() &&
-	   $op.text.equals("="))
-	   $type = new ExprType();
-	else {
-    	   $type = new ExprType($e1.type, $e2.type);
-
-           if ($op.text.equals("*=") || 
-	      $op.text.equals("/=") || 
-	      $op.text.equals("%=") || 
-	      $op.text.equals("+=") || 
-	      $op.text.equals("-="))
-           $type.setArith();
-
- 	   if ($e1.type.isVar() && $e2.type.isVar() && 
-	   ($op.text.equals("*=") || $op.text.equals("/=") || $op.text.equals("%=")))
-	   $type.setNonLinear();
-        } 
-    }
-    |   DigitSequence { $type = new ExprType(); $type.setConst(); } // for
+    |   e1=unaryExpression op=assignmentOperator e2=assignmentExpression { $type =  new ExprType($e1.type, $e2.type, $op.text); }
+    |   DigitSequence { $type = new ExprType(ExprType.CONST); } // for
     ;
 
 assignmentOperator
@@ -379,24 +339,9 @@ directDeclarator
     :   Identifier
     |   '(' declarator ')'
     |   directDeclarator '[' typeQualifierList? ']'
-    |   directDeclarator tok='[' typeQualifierList? e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   directDeclarator '[' tok='static' typeQualifierList? e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   directDeclarator '[' typeQualifierList tok='static' e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    |   directDeclarator tok='[' typeQualifierList? e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   directDeclarator '[' tok='static' typeQualifierList? e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   directDeclarator '[' typeQualifierList tok='static' e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
     |   directDeclarator '[' typeQualifierList? '*' ']'
     |   directDeclarator '(' parameterTypeList ')'
     |   directDeclarator '(' identifierList? ')'
@@ -474,45 +419,15 @@ abstractDeclarator
 directAbstractDeclarator
     :   '(' abstractDeclarator ')' gccDeclaratorExtension*
     |   '[' typeQualifierList? ']'
-    |   tok='[' typeQualifierList? e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   '[' tok='static' typeQualifierList? e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   '[' typeQualifierList tok='static' e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    |   tok='[' typeQualifierList? e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   '[' tok='static' typeQualifierList? e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   '[' typeQualifierList tok='static' e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
     |   '[' '*' ']'
     |   '(' parameterTypeList? ')' gccDeclaratorExtension*
     |   directAbstractDeclarator '[' typeQualifierList? ']'
-    |   directAbstractDeclarator tok='[' typeQualifierList? e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   directAbstractDeclarator '[' tok='static' typeQualifierList? e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   directAbstractDeclarator '[' typeQualifierList tok='static' e=assignmentExpression ']' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    |   directAbstractDeclarator tok='[' typeQualifierList? e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   directAbstractDeclarator '[' tok='static' typeQualifierList? e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   directAbstractDeclarator '[' typeQualifierList tok='static' e=assignmentExpression ']' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
     |   directAbstractDeclarator '[' '*' ']'
     |   directAbstractDeclarator '(' parameterTypeList? ')' gccDeclaratorExtension*
     ;
@@ -522,12 +437,7 @@ typedefName
     ;
 
 initializer
-    :   e=assignmentExpression { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType(0, $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    :   e=assignmentExpression { ExprTypeCounter.incType($e.type, 0); }
     |   '{' initializerList '}'
     |   '{' initializerList ',' '}'
     ;
@@ -587,42 +497,17 @@ blockItem
 
 expressionStatement
     : ';'
-    |   e=expression tok=';' { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    | { ExprType.expression = true; } e=expression tok=';' { ExprTypeCounter.incType($e.type, $tok.getLine()); ExprType.expression = false; }
     ;
 
 selectionStatement
-    :   tok='if' '(' e=expression ')' statement ('else' statement)? { 
-          if (CMain.verbosityLevel >= CMain.MEDIUM) 
-	      ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   tok='switch' '(' e=expression ')' statement { 
-          if (CMain.verbosityLevel >= CMain.MEDIUM) 
-	      ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    :   tok='if' '(' e=expression ')' statement ('else' statement)? { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   tok='switch' '(' e=expression ')' statement { ExprTypeCounter.incType($e.type, $tok.getLine()); }
     ;
 
 iterationStatement
-    :   tok=While '(' e=expression ')' statement { 
-          if (CMain.verbosityLevel >= CMain.MEDIUM) 
-	      ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   tok=Do statement While '(' e=expression ')' ';' { 
-          if (CMain.verbosityLevel >= CMain.MEDIUM) 
-	      ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	  ExprTypeCounter.incType($e.type); 
-    }
+    :   tok=While '(' e=expression ')' statement { ExprTypeCounter.incType($e.type, $tok.getLine()); }
+    |   tok=Do statement While '(' e=expression ')' ';' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
     |   For '(' forCondition ')' statement
     ;
 
@@ -637,18 +522,8 @@ forDeclaration
     ;
 
 forExpression
-    :   e=assignmentExpression { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType(0, $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
-    |   forExpression tok=',' e=assignmentExpression { 
-        if (CMain.verbosityLevel >= CMain.MEDIUM)	
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    :   e=assignmentExpression { ExprTypeCounter.incType($e.type, 0); }
+    |   forExpression tok=',' e=assignmentExpression { ExprTypeCounter.incType($e.type, $tok.getLine()); }
     ;
 
 jumpStatement
@@ -656,12 +531,7 @@ jumpStatement
     |   'continue' ';'
     |   'break' ';'
     |   'return' ';'
-    |   tok='return' e=expression ';' { 
-       	if (CMain.verbosityLevel >= CMain.MEDIUM) 
-	   ExprTypeCounter.printType($tok.getLine(), $e.type);
-
-    	ExprTypeCounter.incType($e.type); 
-    }
+    |   tok='return' e=expression ';' { ExprTypeCounter.incType($e.type, $tok.getLine()); }
     |   'goto' unaryExpression ';' // GCC extension
     ;
 

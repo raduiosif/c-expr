@@ -3,6 +3,8 @@
 
 pre=$(pwd)"/pre"
 
+echo "Building include options ..."
+
 for i in $(find $1 -type d -print)
 do 
     inc="-I"$i" "$inc" "

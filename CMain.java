@@ -11,8 +11,11 @@ public class CMain {
     static private boolean isPre = false;
     static public int verbosityLevel = 0;
 
-    public static void driver(String path) throws Exception {
+    public static void driver(String path) throws Exception {      
 	File file = new File(path);
+
+	if (file.getName().startsWith("._"))
+	    return;
 
 	if (file.isFile()) {
 	    if (isPre) {    
@@ -37,7 +40,6 @@ public class CMain {
 	    for (int i = 0; i < fileList.length; i ++)
 		driver(path + "/" + fileList[i].getName());
 	} 
-	else { throw new Exception("cannot handle path: " + path); }
     }
 
     public static void usage() {
